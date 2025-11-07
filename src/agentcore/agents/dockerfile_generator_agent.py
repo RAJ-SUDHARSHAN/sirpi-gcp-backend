@@ -145,7 +145,9 @@ This is a monorepo with backend and frontend.
                 self.logger.warning("Dockerfile missing CMD/ENTRYPOINT, adding default CMD")
                 # Add a default CMD based on language
                 if analysis.language.lower() == "python":
-                    dockerfile += f'\nCMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "{analysis.exposed_port or 8080}"]'
+                    # For Python: Use python -m to run the main module
+                    # The app should read PORT from environment (Cloud Run sets this)
+                    dockerfile += '\nCMD ["python", "-m", "src.main"]'
                 elif analysis.language.lower() in ["javascript", "typescript"]:
                     cmd = analysis.start_command or "node server.js"
                     dockerfile += f"\nCMD {json.dumps(cmd.split())}"
