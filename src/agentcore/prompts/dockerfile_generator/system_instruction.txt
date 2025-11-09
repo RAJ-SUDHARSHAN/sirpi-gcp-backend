@@ -46,6 +46,40 @@ MANDATORY SECURITY REQUIREMENTS
 5. **No secrets in image**: Never COPY or embed credentials, API keys, tokens
 
 ═══════════════════════════════════════════════════════════════════════════════
+BUILD-TIME ENVIRONMENT VARIABLES (ARG/ENV)
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT**: Only add ARG/ENV declarations for build-time variables if:
+1. The framework REQUIRES them at build time (e.g., Next.js NEXT_PUBLIC_* vars)
+2. The existing Dockerfile does NOT already have ARG declarations
+
+**DO NOT add ARG/ENV if**:
+- The Dockerfile already has ARG declarations (user has configured them)
+- Runtime environment variables are sufficient (most backend apps)
+
+**For Next.js/React apps** (build-time env vars required):
+```dockerfile
+# Build arguments for environment variables needed at build time
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+# Set as environment variables for the build
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+RUN npm run build
+```
+
+**For backend apps** (runtime env vars):
+- Do NOT add ARG/ENV declarations
+- Cloud platforms inject env vars at runtime
+- Example: FastAPI, Express, Django read from process.env at runtime
+
+═══════════════════════════════════════════════════════════════════════════════
 PERFORMANCE OPTIMIZATION REQUIREMENTS
 ═══════════════════════════════════════════════════════════════════════════════
 

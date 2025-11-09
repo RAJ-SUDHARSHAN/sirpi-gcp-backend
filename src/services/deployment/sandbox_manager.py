@@ -56,7 +56,7 @@ class SandboxManager:
     def _log(self, message: str):
         """Internal logging that also calls callback if set."""
         from datetime import datetime
-        
+
         logger.info(message)
         if self._log_callback:
             # Add timestamp to deployment logs for consistency with workflow logs
@@ -192,7 +192,11 @@ class SandboxManager:
             raise
 
     async def build_docker_image(
-        self, dockerfile_path: str, image_name: str, context_dir: str = "."
+        self,
+        dockerfile_path: str,
+        image_name: str,
+        context_dir: str = ".",
+        build_args: Optional[Dict[str, str]] = None,
     ) -> str:
         """
         Build Docker image in sandbox.
@@ -201,6 +205,7 @@ class SandboxManager:
             dockerfile_path: Path to Dockerfile
             image_name: Name and tag for the image (e.g., "myapp:latest")
             context_dir: Build context directory
+            build_args: Optional build arguments to pass to docker build (e.g., {"API_KEY": "value"})
 
         Returns:
             Image name with tag
@@ -214,8 +219,18 @@ class SandboxManager:
         self._log(f"Building Docker image: {image_name}...")
 
         try:
-            # Build Docker image (can take 5-10 minutes) - use run_command for streaming
-            build_cmd = f"cd {context_dir} && docker build -f {dockerfile_path} -t {image_name} ."
+            # Build Docker command with optional build args
+            build_cmd = f"cd {context_dir} && docker build -f {dockerfile_path}"
+
+            # Add build args if provided
+            if build_args:
+                self._log(f"Using {len(build_args)} build arguments")
+                for key, value in build_args.items():
+                    # Escape quotes in values
+                    escaped_value = value.replace('"', '\\"')
+                    build_cmd += f' --build-arg {key}="{escaped_value}"'
+
+            build_cmd += f" -t {image_name} ."
 
             result = await self.run_command(
                 build_cmd,

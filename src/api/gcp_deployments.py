@@ -104,14 +104,38 @@ async def build_gcp_image(
             # Get default branch from project (fallback to 'main' if not set)
             branch = project.get("default_branch", "main")
             
+            # Check if Dockerfile has ARG declarations and prepare build args
+            build_args = None
+            dockerfile_content = dockerfile["content"]
+            
+            # Detect ARG declarations in Dockerfile (case-insensitive)
+            import re
+            arg_pattern = re.compile(r'^ARG\s+([A-Z_][A-Z0-9_]*)', re.MULTILINE | re.IGNORECASE)
+            declared_args = arg_pattern.findall(dockerfile_content)
+            
+            if declared_args:
+                await send_log(project_id, f"📋 Detected {len(declared_args)} ARG declarations in Dockerfile")
+                
+                # Get environment variables from database
+                env_vars = await get_decrypted_env_vars(project_id)
+                
+                # Filter env vars to only those declared as ARGs in Dockerfile
+                build_args = {key: value for key, value in env_vars.items() if key in declared_args}
+                
+                if build_args:
+                    await send_log(project_id, f"🔧 Passing {len(build_args)} build arguments to Docker")
+                else:
+                    await send_log(project_id, "⚠️  No matching environment variables found for declared ARGs")
+            
             image_uri = await gcp_service.build_and_push_image(
                 user_id=user_id,
                 gcp_project_id=gcp_project_id,
                 repository_url=project["repository_url"],
                 branch=branch,
                 image_name=image_name,
-                dockerfile_content=dockerfile["content"],
+                dockerfile_content=dockerfile_content,
                 log_callback=collecting_callback,
+                build_args=build_args,
             )
 
         # Send completion signal to close the stream

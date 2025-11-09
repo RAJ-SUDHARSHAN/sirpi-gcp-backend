@@ -40,6 +40,7 @@ class GCPDeploymentService:
         image_name: str,
         dockerfile_content: str,
         log_callback: Optional[Callable[[str], None]] = None,
+        build_args: Optional[Dict[str, str]] = None,
     ) -> str:
         """
         Build Docker image and push to Artifact Registry.
@@ -52,6 +53,7 @@ class GCPDeploymentService:
             image_name: Name for the Docker image
             dockerfile_content: Dockerfile content (from generated files)
             log_callback: Optional callback for streaming logs
+            build_args: Optional build arguments for Docker build (e.g., env vars for Next.js)
 
         Returns:
             Full image URI (e.g., us-central1-docker.pkg.dev/PROJECT/REPO/IMAGE:TAG)
@@ -67,9 +69,12 @@ class GCPDeploymentService:
             dockerfile_path = f"{repo_dir}/Dockerfile"
             await self.sandbox.write_file(dockerfile_path, dockerfile_content)
 
-            # Build Docker image
+            # Build Docker image with build args if provided
             await self.sandbox.build_docker_image(
-                dockerfile_path=dockerfile_path, image_name=image_name, context_dir=repo_dir
+                dockerfile_path=dockerfile_path,
+                image_name=image_name,
+                context_dir=repo_dir,
+                build_args=build_args,
             )
 
             # Configure gcloud AND Terraform credentials
@@ -247,7 +252,9 @@ class GCPDeploymentService:
             logger.warning(f"Could not check APIs: {e}")
             self.sandbox._log("⚠️ Could not verify APIs (non-fatal)")
 
-    async def _ensure_artifact_registry(self, project_id: str, location: str, repository_name: str):
+    async def _ensure_artifact_registry(
+        self, user_id: str, project_id: str, location: str, repository_name: str
+    ):
         """Create Artifact Registry repository if it doesn't exist."""
         try:
             # Use Python SDK to create registry (no gcloud needed!)
