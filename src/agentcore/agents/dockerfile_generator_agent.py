@@ -143,6 +143,42 @@ This is a monorepo with backend and frontend.
             if "FROM" not in dockerfile_upper:
                 raise ValueError("Dockerfile missing FROM instruction")
 
+            # CRITICAL: Validate Next.js standalone mode has .next/static copy
+            if analysis.framework and "next" in analysis.framework.lower():
+                if "STANDALONE" in dockerfile_upper or "OUTPUT:" in dockerfile_upper:
+                    if ".NEXT/STATIC" not in dockerfile_upper:
+                        self.logger.error(
+                            "CRITICAL: Next.js standalone Dockerfile missing .next/static copy!"
+                        )
+                        self.logger.error(
+                            "This will cause CSS/JS to not load (white page with unstyled text)"
+                        )
+                        # Add the missing copy after standalone
+                        lines = dockerfile.split("\n")
+                        fixed_lines = []
+                        for i, line in enumerate(lines):
+                            fixed_lines.append(line)
+                            # If this line copies standalone, add static copy after it
+                            if "COPY" in line.upper() and "STANDALONE" in line.upper():
+                                # Check if next line already has static
+                                if (
+                                    i + 1 < len(lines)
+                                    and ".next/static" not in lines[i + 1].lower()
+                                ):
+                                    fixed_lines.append("")
+                                    fixed_lines.append(
+                                        "# CRITICAL: Copy static assets for CSS/JS to work"
+                                    )
+                                    fixed_lines.append(
+                                        "COPY --from=builder /app/.next/static ./.next/static"
+                                    )
+                                    fixed_lines.append("COPY --from=builder /app/public ./public")
+                                    self.logger.warning(
+                                        "Auto-fixed: Added missing .next/static copy"
+                                    )
+                        dockerfile = "\n".join(fixed_lines)
+                        dockerfile_upper = dockerfile.upper()
+
             if "CMD" not in dockerfile_upper and "ENTRYPOINT" not in dockerfile_upper:
                 self.logger.warning("Dockerfile missing CMD/ENTRYPOINT, adding default CMD")
                 # Add a default CMD based on language

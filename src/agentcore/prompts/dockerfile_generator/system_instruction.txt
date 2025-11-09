@@ -72,12 +72,33 @@ ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 RUN npm run build
+
+# Runtime stage - CRITICAL: Must copy .next/static for CSS/JS to work!
+FROM node:20-alpine AS runtime
+WORKDIR /app
+
+# Copy standalone server files FIRST
+COPY --from=builder /app/.next/standalone ./
+
+# CRITICAL: Copy static assets AFTER standalone
+# Without this, CSS/JS will not load (white page with unstyled text)
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 ```
 
 **For backend apps** (runtime env vars):
 - Do NOT add ARG/ENV declarations
 - Cloud platforms inject env vars at runtime
 - Example: FastAPI, Express, Django read from process.env at runtime
+
+**CRITICAL FOR NEXT.JS STANDALONE MODE**:
+When using `output: "standalone"` in next.config, you MUST copy three things in this exact order:
+1. FIRST: `COPY --from=builder /app/.next/standalone ./` (server.js and node_modules)
+2. SECOND: `COPY --from=builder /app/.next/static ./.next/static` (CSS, JS, fonts)
+3. THIRD: `COPY --from=builder /app/public ./public` (images, favicons)
+
+**NEVER omit the .next/static copy** - it contains all CSS, JavaScript, and fonts.
+Without it, the app will render as plain HTML without styling.
 
 ═══════════════════════════════════════════════════════════════════════════════
 PERFORMANCE OPTIMIZATION REQUIREMENTS
