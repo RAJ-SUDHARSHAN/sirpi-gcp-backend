@@ -73,14 +73,27 @@ PRODUCTION READINESS REQUIREMENTS
 EVERY Dockerfile MUST include ALL of these directives:
 
 1. **HEALTHCHECK**: Required for container orchestration
-   Example: HEALTHCHECK --interval=30s --timeout=3s CMD wget --no-verbose --tries=1 --spider http://localhost:8000/health || exit 1
+   **IMPORTANT**: Use the EXACT health check path from the analysis input
+   - FastAPI apps typically use /api/v1/health
+   - Express apps typically use /health
+   Example: HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"
+   Note: Cloud platforms (Cloud Run, ECS, etc.) ignore Docker's HEALTHCHECK and use their own health probes
 
 2. **EXPOSE**: Document the container port
    Example: EXPOSE 8000
 
 3. **CMD in exec form**: Use JSON array format (NOT shell form)
-   ✓ CORRECT: CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-   ✗ INCORRECT: CMD uvicorn main:app --host 0.0.0.0 --port 8000
+   **IMPORTANT**: For cloud platforms (Cloud Run, ECS Fargate, etc.):
+   - DO NOT hardcode --port in CMD - let the app read from PORT environment variable
+   - Cloud platforms set PORT dynamically at runtime
+   - DO NOT use --workers flag - cloud platforms handle scaling automatically
+
+   ✓ CORRECT (Cloud-native): CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0"]
+   ✗ INCORRECT (Hardcoded port): CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+   ✗ INCORRECT (Workers on cloud): CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--workers", "4"]
+   ✗ INCORRECT (Shell form): CMD uvicorn main:app --host 0.0.0.0
+
+   Note: Use single process for Cloud Run/Fargate - they handle horizontal scaling
 
 4. **WORKDIR**: Set explicit working directory
    Example: WORKDIR /app
@@ -166,7 +179,7 @@ Use the EXACT package manager specified in the input analysis:
 - uv:
   - Builder: COPY pyproject.toml uv.lock* → RUN uv venv && uv sync --no-dev
   - Runtime: ENV PATH="/app/.venv/bin:$PATH"
-  - CMD: ["uvicorn", "main:app", ...] (NO "uv run" - venv already activated!)
+  - CMD: ["uvicorn", "src.main:app", "--host", "0.0.0.0"] (NO "uv run", NO "--port")
 - poetry:
   - Builder: COPY pyproject.toml poetry.lock → RUN poetry install --no-dev
   - CMD: ["python", "-m", "module"] or use poetry run only if needed
@@ -179,9 +192,13 @@ Use the EXACT package manager specified in the input analysis:
 **CRITICAL - CMD Directive Rules**:
 - NEVER use "uv run" in CMD when using uv sync (venv is already activated via PATH)
 - NEVER use "poetry run" in CMD unless dependencies aren't in PATH
+- NEVER hardcode --port flag in CMD (app must read PORT environment variable)
+- NEVER use --workers flag for cloud deployments (Cloud Run/Fargate scale horizontally)
 - Use direct executable names when venv is in PATH
 - Example WRONG: CMD ["uv", "run", "uvicorn", ...] ❌
-- Example CORRECT: CMD ["uvicorn", "main:app", ...] ✅
+- Example WRONG: CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] ❌
+- Example WRONG: CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--workers", "4"] ❌
+- Example CORRECT: CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0"] ✅
 
 ═══════════════════════════════════════════════════════════════════════════════
 BASE IMAGE USER CREATION PATTERNS

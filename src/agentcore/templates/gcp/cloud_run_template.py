@@ -24,7 +24,7 @@ class CloudRunTemplateGenerator:
         """
         # Get dynamic values from analysis
         port = analysis_result.exposed_port or 8080
-        health_path = analysis_result.health_check_path or "/api/v1/health"
+        health_path = analysis_result.health_check_path or "/"
 
         # Use central registry from config (same as build step)
         from src.core.config import settings

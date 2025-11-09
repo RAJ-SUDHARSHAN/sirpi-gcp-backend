@@ -63,14 +63,15 @@ async def import_repository(
                         """
                         INSERT INTO projects
                         (id, user_id, name, slug, repository_url, repository_name,
-                         github_repo_id, installation_id, language, description, status)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         github_repo_id, installation_id, language, description, status, default_branch)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (user_id, slug) DO UPDATE SET
                             github_repo_id = EXCLUDED.github_repo_id,
                             installation_id = EXCLUDED.installation_id,
                             language = EXCLUDED.language,
                             description = EXCLUDED.description,
                             status = EXCLUDED.status,
+                            default_branch = EXCLUDED.default_branch,
                             updated_at = NOW()
                         RETURNING id, name, slug, status, created_at
                     """,
@@ -86,6 +87,7 @@ async def import_repository(
                             repo_data.get("language"),
                             repo_data.get("description"),
                             "pending",
+                            repo_data.get("default_branch", "main"),
                         ),
                     )
 

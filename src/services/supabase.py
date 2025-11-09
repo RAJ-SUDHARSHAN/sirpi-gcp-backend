@@ -477,6 +477,7 @@ class SupabaseService:
     ) -> bool:
         """
         Update project's generation status and count.
+        When generation completes, also resets deployment_status to 'not_deployed' if it was previously destroyed.
 
         Args:
             project_id: Project UUID
@@ -487,28 +488,53 @@ class SupabaseService:
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
-                    if increment_count:
-                        if cloud_provider:
-                            cur.execute(
-                                """
-                                UPDATE projects
-                                SET status = %s,
-                                    cloud_provider = %s,
-                                    generation_count = generation_count + 1,
-                                    last_generated_at = NOW(),
-                                    updated_at = NOW()
-                                WHERE id = %s
-                                RETURNING id
-                            """,
-                                (status, cloud_provider, project_id),
-                            )
+                    # If generation completed, reset deployment_status if it was destroyed
+                    if status == "completed":
+                        if increment_count:
+                            if cloud_provider:
+                                cur.execute(
+                                    """
+                                    UPDATE projects
+                                    SET status = %s,
+                                        cloud_provider = %s,
+                                        generation_count = generation_count + 1,
+                                        last_generated_at = NOW(),
+                                        deployment_status = CASE 
+                                            WHEN deployment_status = 'destroyed' THEN 'not_deployed'
+                                            ELSE deployment_status
+                                        END,
+                                        updated_at = NOW()
+                                    WHERE id = %s
+                                    RETURNING id
+                                """,
+                                    (status, cloud_provider, project_id),
+                                )
+                            else:
+                                cur.execute(
+                                    """
+                                    UPDATE projects
+                                    SET status = %s,
+                                        generation_count = generation_count + 1,
+                                        last_generated_at = NOW(),
+                                        deployment_status = CASE 
+                                            WHEN deployment_status = 'destroyed' THEN 'not_deployed'
+                                            ELSE deployment_status
+                                        END,
+                                        updated_at = NOW()
+                                    WHERE id = %s
+                                    RETURNING id
+                                """,
+                                    (status, project_id),
+                                )
                         else:
                             cur.execute(
                                 """
                                 UPDATE projects
                                 SET status = %s,
-                                    generation_count = generation_count + 1,
-                                    last_generated_at = NOW(),
+                                    deployment_status = CASE 
+                                        WHEN deployment_status = 'destroyed' THEN 'not_deployed'
+                                        ELSE deployment_status
+                                    END,
                                     updated_at = NOW()
                                 WHERE id = %s
                                 RETURNING id
@@ -516,16 +542,46 @@ class SupabaseService:
                                 (status, project_id),
                             )
                     else:
-                        cur.execute(
-                            """
-                            UPDATE projects
-                            SET status = %s,
-                                updated_at = NOW()
-                            WHERE id = %s
-                            RETURNING id
-                        """,
-                            (status, project_id),
-                        )
+                        # For non-completed statuses, don't touch deployment_status
+                        if increment_count:
+                            if cloud_provider:
+                                cur.execute(
+                                    """
+                                    UPDATE projects
+                                    SET status = %s,
+                                        cloud_provider = %s,
+                                        generation_count = generation_count + 1,
+                                        last_generated_at = NOW(),
+                                        updated_at = NOW()
+                                    WHERE id = %s
+                                    RETURNING id
+                                """,
+                                    (status, cloud_provider, project_id),
+                                )
+                            else:
+                                cur.execute(
+                                    """
+                                    UPDATE projects
+                                    SET status = %s,
+                                        generation_count = generation_count + 1,
+                                        last_generated_at = NOW(),
+                                        updated_at = NOW()
+                                    WHERE id = %s
+                                    RETURNING id
+                                """,
+                                    (status, project_id),
+                                )
+                        else:
+                            cur.execute(
+                                """
+                                UPDATE projects
+                                SET status = %s,
+                                    updated_at = NOW()
+                                WHERE id = %s
+                                RETURNING id
+                            """,
+                                (status, project_id),
+                            )
 
                     result = cur.fetchone()
                     return bool(result)

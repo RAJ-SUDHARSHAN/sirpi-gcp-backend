@@ -55,9 +55,14 @@ class SandboxManager:
 
     def _log(self, message: str):
         """Internal logging that also calls callback if set."""
+        from datetime import datetime
+        
         logger.info(message)
         if self._log_callback:
-            self._log_callback(message)
+            # Add timestamp to deployment logs for consistency with workflow logs
+            timestamp_str = datetime.now().strftime("%I:%M:%S %p")
+            formatted_message = f"{timestamp_str}  {message}"
+            self._log_callback(formatted_message)
 
     async def _ensure_docker_daemon(self):
         """Ensure Docker daemon is running and accessible."""

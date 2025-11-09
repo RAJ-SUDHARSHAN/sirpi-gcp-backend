@@ -10,7 +10,10 @@ from pydantic import BaseModel, Field
 
 from src.agentcore.agents.base_agent import BaseAgent
 from src.agentcore.prompts import load_prompt_file, load_all_examples, format_prompt
-from src.agentcore.config.framework_metadata import get_build_output_path, detect_frontend_framework_from_dependencies
+from src.agentcore.config.framework_metadata import (
+    get_build_output_path,
+    detect_frontend_framework_from_dependencies,
+)
 from .code_analyzer_agent import AnalysisResult
 
 
@@ -125,8 +128,7 @@ This is a monorepo with backend and frontend.
 
                 # Get build output path from framework metadata
                 build_output = get_build_output_path(
-                    framework=analysis.framework or "react",
-                    frontend_framework=frontend_fw
+                    framework=analysis.framework or "react", frontend_framework=frontend_fw
                 )
 
                 # Replace placeholder with actual path
@@ -176,6 +178,7 @@ This is a monorepo with backend and frontend.
         Common issues:
         1. Using "uv run" when venv is already activated via PATH
         2. Using "poetry run" unnecessarily
+        3. Hardcoding port in uvicorn CMD (should read from PORT env var)
         """
         lines = dockerfile.split("\n")
         fixed_lines = []
@@ -188,17 +191,47 @@ This is a monorepo with backend and frontend.
                 # Fix: Remove "uv run" when using uv with activated venv
                 if analysis.package_manager == "uv" and '"uv", "run"' in line:
                     # Remove the "uv", "run" part from the CMD
-                    line = line.replace('"uv", "run", ', '')
+                    line = line.replace('"uv", "run", ', "")
                     self.logger.warning(f"Fixed CMD: Removed 'uv run' (venv already activated)")
                     self.logger.warning(f"  Before: {original_line.strip()}")
                     self.logger.warning(f"  After:  {line.strip()}")
 
                 # Fix: Remove "poetry run" when using poetry with activated venv
                 if analysis.package_manager == "poetry" and '"poetry", "run"' in line:
-                    line = line.replace('"poetry", "run", ', '')
+                    line = line.replace('"poetry", "run", ', "")
                     self.logger.warning(f"Fixed CMD: Removed 'poetry run' (venv already activated)")
                     self.logger.warning(f"  Before: {original_line.strip()}")
                     self.logger.warning(f"  After:  {line.strip()}")
+
+                # Fix: Remove hardcoded --port from uvicorn (Cloud Run sets PORT env var)
+                if "uvicorn" in line and ("--port" in line or "--workers" in line):
+                    import re
+
+                    # Remove --port and its value (e.g., "--port", "8000" or --port 8000)
+                    line = re.sub(r',?\s*"--port",\s*"\d+"', "", line)  # JSON array format
+                    line = re.sub(r"\s+--port\s+\d+", "", line)  # Shell format
+                    # Remove --workers and its value (Cloud Run scales horizontally)
+                    line = re.sub(r',?\s*"--workers",\s*"\d+"', "", line)  # JSON array format
+                    line = re.sub(r"\s+--workers\s+\d+", "", line)  # Shell format
+                    self.logger.warning(
+                        f"Fixed CMD: Removed hardcoded --port/--workers (cloud-native)"
+                    )
+                    self.logger.warning(f"  Before: {original_line.strip()}")
+                    self.logger.warning(f"  After:  {line.strip()}")
+
+            # Fix: Update HEALTHCHECK path to match detected health endpoint
+            if line.strip().startswith("HEALTHCHECK"):
+                original_line = line
+                # If analysis has health_check_path and it's not in the HEALTHCHECK, fix it
+                if analysis.health_check_path and analysis.health_check_path not in line:
+                    import re
+
+                    # Replace /health with the correct path
+                    line = re.sub(r'/health(?=["\'\s])', analysis.health_check_path, line)
+                    if line != original_line:
+                        self.logger.warning(f"Fixed HEALTHCHECK: Updated path to match analysis")
+                        self.logger.warning(f"  Before: {original_line.strip()}")
+                        self.logger.warning(f"  After:  {line.strip()}")
 
             fixed_lines.append(line)
 

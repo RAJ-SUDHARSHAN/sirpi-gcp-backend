@@ -259,7 +259,16 @@ Provide your analysis as a JSON object matching the schema in your instructions.
                 result_json["health_check_path"] = health_check.get("endpoint", "/")
             else:
                 result_json["health_check_path"] = "/"
-        
+
+        # Fix common health check path issues for FastAPI
+        if result_json.get("health_check_path") == "/health":
+            framework = result_json.get("framework", "").lower()
+            # FastAPI apps typically use /api/v1/health with router prefix
+            if "fastapi" in framework or (result_json.get("language", "").lower() == "python" and
+                                         any(dep in result_json.get("dependencies", {}) for dep in ["fastapi", "uvicorn"])):
+                result_json["health_check_path"] = "/api/v1/health"
+                self.logger.info("Updated health_check_path from /health to /api/v1/health (FastAPI convention)")
+
         # Add monorepo info from repo_data
         result_json["is_monorepo"] = repo_data.is_monorepo
         if repo_data.is_monorepo and repo_data.monorepo_subdirectory:

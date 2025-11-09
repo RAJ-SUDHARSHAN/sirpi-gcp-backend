@@ -2,7 +2,7 @@ FROM python:3.12-slim AS builder
 WORKDIR /app
 RUN pip install uv
 COPY pyproject.toml uv.lock* ./
-RUN uv venv && uv pip install --no-cache
+RUN uv venv && uv sync --no-dev
 
 FROM python:3.12-slim AS runtime
 WORKDIR /app
@@ -13,6 +13,6 @@ RUN useradd -m -u 1001 appuser && \
 ENV PATH="/app/.venv/bin:$PATH"
 USER appuser
 EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0"]
 

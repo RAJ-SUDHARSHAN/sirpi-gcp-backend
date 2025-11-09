@@ -55,6 +55,7 @@ WHAT TO GENERATE
 - Create non-root user with correct syntax for base image
 - Output raw Dockerfile content starting with FROM
 - Use {FRONTEND_BUILD_OUTPUT} placeholder for monorepo frontend builds
+- Use the EXACT health check path specified: {health_check_path}
 
 ✗ DO NOT:
 - Add markdown code fences (```)

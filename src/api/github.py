@@ -113,10 +113,11 @@ async def get_installation_repos(installation_id: int):
                 "name": repo["name"],
                 "full_name": repo["full_name"],
                 "private": repo["private"],
-                "url": repo["html_url"],
+                "html_url": repo["html_url"],
                 "description": repo["description"],
                 "language": repo["language"],
                 "default_branch": repo["default_branch"],
+                "updated_at": repo.get("updated_at"),
             }
             for repo in repos
         ],
